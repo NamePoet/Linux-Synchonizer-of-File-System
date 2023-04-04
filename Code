@@ -1,0 +1,506 @@
+#!/bin/bash
+function AddtoSynchro {
+  cd $1
+  ls -R $1 | grep ./ | cut -d ':' -f 1|cut -d '.' -f 2- > /home/.cache_rep_temp
+  while read -r line1
+  do
+      cd $line1  
+      ls -l | sed 's/ \+/ /g'| cut -d ' ' -f 9 > /home/.cache2
+      sed -i '1d' /home/.cache2
+      while read -r line2
+      do   
+           
+           echo $(pwd $line1/$line2) >> /home/.synchro                    
+           a=$(ls -l $line1 | grep -w $line2 | sed 's/ \+/ /g'| cut -d ' ' -f 1,5,9)
+           b=$(stat $line1/$line2  | awk 'NR==6 {print $0}'| cut -d ' ' -f 2,3)
+           c=$(file -b $line2)
+           sed -i '$s/$/ '"$a $b $c"' /' /home/.synchro  
+         
+      done < /home/.cache2
+      rm  /home/.cache2      
+  done < /home/.cache_rep_temp
+rm /home/.cache_rep_temp
+}
+
+function fiche_syn {
+touch /home/.synchro_temp
+touch /home/.cache_comp1
+
+ while read -r line;do   
+    Temp_PATH=$(echo $line | cut -d " " -f 1)
+   
+    if [ ${Temp_PATH} = $1 ];then
+        IsFile2=$(echo $line | cut -d " " -f 3)
+        if [ ${IsFile2} -ne "4096" ];then
+            echo $line >> /home/.synchro_temp            
+        fi
+       
+    elif [ ${Temp_PATH} = $2 ];then
+        IsFile2=$(echo $line | cut -d " " -f 3)
+        if [ ${IsFile2} -ne "4096" ];then
+           echo $line >> /home/.synchro_temp  
+        fi
+    fi
+ done</home/.synchro
+ 
+ touch /home/.cache_fiche
+ PATH2=${arr[1]}
+ PATH1=$1
+ CUT=$(echo ${PATH1#*${PATH2}})
+ PathExist2=$(cat /home/.sous_repertoire | grep -w $CUT)
+ if [ $? -eq 0 ];then
+     ls -l $1 | sed 's/ \+/ /g' > /home/.cache_fiche     
+
+     sed -i 1d /home/.cache_fiche
+ fi
+ while read -r line;do
+     IsFile=$(echo $line | sed 's/ \+/ /g'| cut -d ' ' -f 5)
+
+     if [ ${IsFile} -ne "4096" ];then
+         FILENAME=$(echo $line | cut -d " " -f 9)
+          
+         echo $FILENAME >> /home/.cache_comp1
+         TIME=$(stat $1/$FILENAME | awk 'NR==6 {print $0}'| cut -d ' ' -f 3)
+         sed -i '$s/$/ '"$TIME"' /' /home/.cache_comp1  
+     fi
+ 
+ done</home/.cache_fiche
+ rm /home/.cache_fiche
+   while read -r line  
+   do           
+       Name=$(echo $line | cut -d " " -f 1) 
+       temp=$(find $2 -name $Name | wc -L)  
+       if [ "$temp " -eq "0" ];then  
+           temp1=$(cat /home/.synchro_temp | grep -w $Name) 
+           if [ $? -ne "0" ];then  
+               echo -e "\033[1;32m=== Il y a un fichier << $Name >> qui n'exist pas ===\033[0m"
+               mdftime2=$(stat $1 | awk 'NR==6 {print $0}'| cut -d ' ' -f 3) 
+               cp -fp $1/$Name $2  
+               touch -m -d "$(stat $1/$Name| awk 'NR==6 {print $0}'| cut -d ' ' -f 3)" $2/$Name   
+               touch -m -d $mdftime2 $2  
+               echo $2 >>/home/.synchro
+               a=$(ls -l $2 | grep -w $Name | sed 's/ \+/ /g'| cut -d ' ' -f 1,5,9)       
+               b=$(stat $2/$Name | awk 'NR==6 {print $0}'| cut -d ' ' -f 2,3)   
+               cd $2
+               c=$(file -b $Name)
+               sed -i '$s/$/ '"$a $b $c"' /' /home/.synchro   
+               echo -e "\033[1;37m<< $Name >> a été copié par defaut (PATH:$2)\033[0m"
+               echo "——————————————————————————————————————————————————————————————————————————————————"
+               flag=1
+           else 
+               echo -e "\033[1;32m=== Le fichier << $Name >> a été supprimé par l'utilisateur ===\033[0m"   
+               mdftime2=$(stat $1 | awk 'NR==6 {print $0}'| cut -d ' ' -f 3) 
+               #Time =$(stat $1/$Name | awk 'NR==6 {print $0}'| cut -d ' ' -f 3) 
+               rm $1/$Name
+               touch -m -d $mdftime2 $1  
+               temp3=$(cat /home/.synchro_temp | grep -w $Name | cut -d " " -f 3-6)
+               sed -i "/${temp3}/d" /home/.synchro
+               echo -e "\033[1;37m<< $Name >> a été supprimé par defaut (PATH:$1)\033[0m"
+               echo "——————————————————————————————————————————————————————————————————————————————————" 
+               flag=1 
+           fi
+       else   
+           StaTime=$(echo $line | cut -d " " -f 2)
+           StaTime1=$(stat $1/$Name | awk 'NR==6 {print $0}'|cut -d ' ' -f 3)
+           StaTime2=$(stat $2/$Name | awk 'NR==6 {print $0}'|cut -d ' ' -f 3)
+           #echo 1---$Name,${StaTime},${StaTime1},${StaTime2}      
+          if [ ${StaTime1} = ${StaTime2} ];then 
+              continue
+          else
+             if [ ${StaTime} = ${StaTime1} ];then 
+               mdftime3=$(stat $2 | awk 'NR==6 {print $0}'| cut -d ' ' -f 3)             
+               rm $2/$Name                           
+               cp -fp $1/$Name $2                                 
+               touch -m -d "$(stat $1/$Name| awk 'NR==6 {print $0}'| cut -d ' ' -f 3)" $2/$Name             
+               touch -m -d $mdftime3 $2                            
+               temp3=$(cat /home/.synchro_temp | grep -w $Name | cut -d " " -f 3-6)
+               sed -i "/${temp3}/d" /home/.synchro                  
+               echo $2 >> /home/.synchro    
+               a=$(ls -l $2 | grep -w $Name | sed 's/ \+/ /g'| cut -d ' ' -f 1,5,9)       
+               b=$(stat $2/$Name | awk 'NR==6 {print $0}'| cut -d ' ' -f 2,3)
+               cd $2 
+               c=$(file -b $Name)
+               sed -i '$s/$/ '"$a $b $c"' /' /home/.synchro 
+               echo -e "\033[1;32m=== Le fichier << $Name >> a été modifié ===\033[0m"
+               echo -e "\033[1;37mPATH: $2\033[0m"
+               echo "——————————————————————————————————————————————————————————————————————————————————"
+               flag=1  
+             fi
+           fi                      
+        fi                 
+   done < /home/.cache_comp1
+   rm /home/.synchro_temp
+   EXIST=$(ls -a /home | grep -w .cache_comp1 | wc -L)
+   if [ ${EXIST} -ne 0 ];then
+       rm /home/.cache_comp1
+   fi
+}
+
+function rep_syn {
+PathExist=$(cat /home/.sous_repertoire | grep -w $3)
+if [ $? -eq "0" ];then
+  cd $1$3 
+  ls -l | grep '^d'|sed 's/ \+/ /g'| cut -d ' ' -f 9 >/home/.cache3 
+  while read -r line3
+  do              
+     IsFile=$(ls -l $1$3 | grep -w $line3 | sed 's/ \+/ /g'| cut -d ' ' -f 5)    
+     if [ ${IsFile} -eq "4096" ];then    
+         RES=$(cat /home/.sous_repertoire_temp | grep -w $3)
+         if [ $? -eq "0" ];then  
+              cd $2$3                    
+              temp1=$(find $2$3 -name $line3 | wc -L) 
+              if [ $temp1 -eq 0 ];then 
+                   temp2=$(cat /home/.synchro | cut -d " " -f 2-|grep -w $line3)  
+                     if [ $? -eq 0 ];then #如果找到
+                          temp2=$(echo $temp2 | cut -d " " -f 5)      
+                          cd $1$3  
+                          temp3=$(stat $line3 |awk 'NR==6 {print $0}'| cut -d ' ' -f 3 ) 
+                              if [ ${temp2} = ${temp3} ];then 
+                                  echo -e "\033[1;32m=== Le repertoire << $line3 >> a été supprimé par l'utilisateur ===\033[0m"
+                                  mdftime1=$(stat $1$3 | awk 'NR==6 {print $0}'| cut -d ' ' -f 3) 
+                                  rm -rf $line3 
+                                  temp4=$(cat /home/.synchro | cut -d " " -f 2-| grep -w $line3 | cut -d " " -f 2-5)                         
+                                  sed -i "/${temp4}/d" /home/.synchro 
+                                  touch -m -d $mdftime1 $1$3  
+                                  cat -n /home/.sous_repertoire | grep -w $line3 | sed 's/ \+/ /g'|cut -d " " -f 2 | cut -d "/" -f 1 > /home/.delete_temp
+                                  echo -e "\033[1;37m<< $line3 >> a été supprimé par defaut (PATH:$1$3)\033[0m"
+                                  echo "——————————————————————————————————————————————————————————————————————————————————" 
+                                  flag=1  
+                               while read -r line;do                                     
+                                     sed -i $(($line))d /home/.sous_repertoire         
+                               done < /home/.delete_temp                       
+                               rm /home/.delete_temp
+                              fi
+                     else   
+                          echo -e "\033[1;32m=== Il y a un repertoire << $line3 >> qui n'exist pas ===\033[0m"                    
+                          mdftime1=$(stat $2$3 | awk 'NR==6 {print $0}'| cut -d ' ' -f 3) 
+                          mdftime2=$(stat $1$3/$line3 | awk 'NR==6 {print $0}'| cut -d ' ' -f 3) 
+                          cp -rfp $1$3/$line3 $2$3
+                          AddtoSynchro $2$3/$line3                                       
+                          touch -m -d $mdftime1 $2$3    
+                          touch -m -d $mdftime2 $2$3/$line3 
+                          echo $2$3 >> /home/.synchro                          
+                          a=$(ls -l $1$3 | grep -w $line3 | sed 's/ \+/ /g'| cut -d ' ' -f 1,5,9)              
+                          b=$(stat $1$3/$line3  | awk 'NR==6 {print $0}'| cut -d ' ' -f 2,3)
+                          cd $1$3 
+                          c=$(file -b $line3)                           
+                          sed -i '$s/$/ '"$a $b $c"' /' /home/.synchro
+                          echo -e "\033[1;37m<< $line3 >> a été copié par defaut (PATH:$2$3)\033[0m"
+                          echo "——————————————————————————————————————————————————————————————————————————————————" 
+                          flag=1                         
+                    fi    
+              fi             
+        else 
+             Res=$(cat /home/.synchro | cut -d " " -f 1 | grep -w $1$3)
+             if [ $? -eq "0" ];then 
+                cd ..
+                PATH=$(pwd)
+                mdftime1=$(stat $PATH | awk 'NR==6 {print $0}'| cut -d ' ' -f 3) 
+                rm -rf $1$3
+                touch -m -d $mdftime1 $PATH                 
+             fi
+         fi     
+     fi                         
+   done</home/.cache3
+   rm /home/.cache3  
+fi 
+fiche_syn $1$3 $2$3
+}
+
+function SYNCHRO {
+   cd $1
+   ls -R | grep ./ | cut -d ':' -f 1|cut -d '.' -f 2- > /home/.sous_repertoire 
+   cd $2
+   ls -R | grep ./ | cut -d ':' -f 1|cut -d '.' -f 2- > /home/.sous_repertoire_temp
+   printf "\033[?25l\033[1;32m[Progression]\033[0m \033[42m\033[1m %d%% %-9s\r\033[0m" 30
+   sleep 0.05
+   while read -r line;do
+   	rep_syn $1 $2 $line
+   done</home/.sous_repertoire
+   printf "\033[?25l\033[1;32m[Progression]\033[0m \033[42m\033[1m %d%% %-15s\r\033[0m" 45
+   sleep 0.05
+   rm /home/.sous_repertoire_temp
+   rm /home/.sous_repertoire
+   cd $2
+   ls -R | grep ./ | cut -d ':' -f 1|cut -d '.' -f 2- > /home/.sous_repertoire 
+   cd $1
+   ls -R | grep ./ | cut -d ':' -f 1|cut -d '.' -f 2- > /home/.sous_repertoire_temp   
+   while read -r line;do
+   	rep_syn $2 $1 $line
+   done</home/.sous_repertoire
+   printf "\033[?25l\033[1;32m[Progression]\033[0m \033[42m\033[1m %d%% %-28s\r\033[0m" 70 
+   sleep 0.05
+   rm /home/.sous_repertoire_temp
+   rm /home/.sous_repertoire
+}
+
+cd /home
+str='Progression:'
+
+flag=0
+exist1=$(find /home -name .cache_syn | wc -L)
+if [ "$exist1 " -eq "0" ];then
+ touch .cache_syn
+ echo -e "\n"
+ echo -e "\033[1;32m=== Bienvenue dans le système de synchronisation de fichiers ===\033[0m" 
+ while :;do
+    echo -e "\n"
+    read -p "Entrer le 1er PATH de synchronisation: " PATH1
+    echo -e "\n"
+    read -p "Entrer le 2ème PATH de synchronisation: " PATH2
+    if [ ${PATH1} = ${PATH2} ];then
+        echo -e "\n"
+        echo -e "\033[1;31m Erreur: Vous avez entré deux PATH identiques.\033[0m"
+        echo -e "\n"
+        echo -e "\033[37m Le synchroniseur fonctionnera sous les chemins que vous specifiez :) \033[0m" 
+        echo -e "\033[1;32m ====== Merci de les entrer a nouveau. ======\033[0m"
+    else
+        break
+    fi
+ done
+    echo $PATH1 >/home/.cache_syn  
+    echo $PATH2 >>/home/.cache_syn
+fi
+
+arr=()
+Num=0
+
+while read -r line
+do
+    arr[$Num]=$line
+    Num=$(expr $Num+1)
+    echo ${arr[$Num]}
+done < /home/.cache_syn
+
+exist2=$(find /home -name .synchro | wc -L)
+if [ "$exist2 " -eq "0" ];then
+    touch .synchro    
+fi
+
+echo -e "\033[1;46;30m====== La Synchronisation a commencé. Soyez patient SVP ======\033[0m"
+echo -e "\n"
+
+ printf "\033[?25l\033[1;32m[Progression]\033[0m \033[42m\033[1m %d%% \r\033[0m" 0
+ sleep 0.05
+
+for num in {0..1}
+do
+   if [ 1 -eq $num ];then
+      temp=${arr[num]}
+      arr[num]=${arr[num-1]}
+      arr[num-1]=$temp
+   fi
+   
+   cd ${arr[0]}
+   for i in $(ls);do      
+      temp=$(ls ${arr[1]} | grep -w $i | wc -L)       
+       if [ "$temp " -eq "0" ];then     
+               touch /home/.FIND_CACHE
+               cat /home/.synchro | grep -w $i > /home/.FIND_CACHE 
+               if [ $? -eq 0 ];then
+                   while read -r LINE;do                      
+                      IsInRoot=$(echo $LINE | cut -d ' ' -f 1)                                 
+                      if [ ${IsInRoot} = ${arr[1]} ];then    
+                         Absent=2                   
+                         break
+                      elif [ ${IsInRoot} = ${arr[0]} ];then
+                         Absent=2                  
+                         break 
+                      else Absent=1        
+                      fi                                                                                        
+                   done < /home/.FIND_CACHE
+               else 
+                   Absent=1
+               fi
+               rm /home/.FIND_CACHE
+                                 
+           if [ $Absent -eq 1 ];then                                                                               
+               IsFile=$(ls -l ${arr[0]}| grep -w $i | sed 's/ \+/ /g'| cut -d ' ' -f 5)            
+               if [ ${IsFile} -eq "4096" ];then 
+                   echo -e "\033[1;32m=== Il y a un repertoire << $i >> qui n'exist pas ===\033[0m"                  
+                   cp -rfp ${arr[0]}/$i ${arr[1]}                   
+                   AddtoSynchro ${arr[1]}/$i 
+               else     
+                   echo -e "\033[1;32m=== Il y a un fichier << $i >> qui n'exist pas ===\033[0m"
+                   
+                   cp -fp ${arr[0]}/$i ${arr[1]}                  
+               fi
+               touch -m -d "$(stat ${arr[0]}/$i| awk 'NR==6 {print $0}'| cut -d ' ' -f 3)" ${arr[1]}/$i                              
+               a=$(ls -l ${arr[0]} | grep -w $i | sed 's/ \+/ /g'| cut -d ' ' -f 1,5,9) 
+               b=$(stat ${arr[0]}/$i  | awk 'NR==6 {print $0}'| cut -d ' ' -f 2,3)
+               cd ${arr[0]}
+               c=$(file -b $i)                      
+               echo ${arr[1]} >> /home/.synchro 
+               sed -i '$s/$/ '"$a $b $c"' /' /home/.synchro                                     
+               echo -e "\033[1;37m << $i >> a été copié par defaut  (PATH: ${arr[1]}) \033[0m"
+               echo "——————————————————————————————————————————————————————————————————————————————————"
+               #echo -e "\n"  
+               flag=1
+          elif [ $Absent -eq 2 ];then 
+               IsFile=$(ls -l ${arr[0]}| grep -w $i | sed 's/ \+/ /g'| cut -d ' ' -f 5) 
+               if [ ${IsFile} -eq "4096" ];then 
+                   echo -e "\033[1;32m=== Le repertoire << $i >> a été supprimé par l'utilisateur ===\033[0m" 
+                   touch /home/.DELETE_CACHE
+                   ls -R ${arr[0]}/$i | grep ./ | cut -d ':' -f 1|cut -d '.' -f 2- >/home/.DELETE_CACHE    
+                   while read -r KEY;do
+                       res1=$(echo ${arr[0]}${KEY#*${arr[0]}})
+                       res2=$(echo ${arr[1]}${KEY#*${arr[0]}})
+                       touch /home/TEMP
+                       cat /home/.synchro | grep -w $res1 > /home/TEMP
+                       while read -r line;do
+                           DEL=$(echo $line | cut -d " " -f 4-6)
+                           sed -i "/${DEL}/d" /home/.synchro
+                       done</home/TEMP
+                       rm  /home/TEMP
+                                             
+                       touch /home/TEMP
+                       cat /home/.synchro | grep -w $res2 > /home/TEMP
+                       while read -r line;do
+                           DEL=$(echo $line | cut -d " " -f 4-6)
+                           sed -i "/${DEL}/d" /home/.synchro
+                       done</home/TEMP
+                       rm  /home/TEMP
+                                               
+                   done< /home/.DELETE_CACHE                  
+                   rm /home/.DELETE_CACHE                                                              
+               else                                      
+                   echo -e "\033[1;32m=== Le fichier << $i >> a été supprimé par l'utilisateur ===\033[0m"       
+               fi
+                           
+               touch /home/.SEARCH_CACHE
+               cat /home/.synchro | grep -w $i> /home/.SEARCH_CACHE
+               
+               while read -r S_Line;do
+                   IsInRoot=$(echo $S_Line | cut -d ' ' -f 1) 
+                   if [ ${IsInRoot} = ${arr[0]} ];then                 
+                       Delete_Key=$(echo $S_Line | cut -d " " -f 6)                       
+                       sed -i "/${Delete_Key}/d" /home/.synchro                
+                       rm -rf ${arr[0]}/$i
+                   elif [ ${IsInRoot} = ${arr[1]} ];then
+                       Delete_Key=$(echo $S_Line | cut -d " " -f 6)                       
+                       sed -i "/${Delete_Key}/d" /home/.synchro                   
+                       rm -rf ${arr[0]}/$i                      
+                   fi
+               done< /home/.SEARCH_CACHE
+               rm /home/.SEARCH_CACHE
+               echo -e "\033[1;37m<< $i >> a été supprimé par defaut (PATH:${arr[0]})\033[0m"
+               echo "——————————————————————————————————————————————————————————————————————————————————"
+               flag=1
+           fi
+       else                                                     
+            touch /home/.SEARCH_CACHE
+            cat /home/.synchro | grep -w $i> /home/.SEARCH_CACHE 
+            while read -r line;do                
+                IsInRoot=$(echo $line | cut -d ' ' -f 1)
+                if [ ${IsInRoot} = ${arr[0]} ];then                    
+                    FIND_SYN=1
+                    break
+                elif [ ${IsInRoot} = ${arr[1]} ];then                   
+                    FIND_SYN=1
+                    break
+                else
+                    FIND_SYN=0
+                fi            
+            done</home/.SEARCH_CACHE
+            count=$(cat /home/.SEARCH_CACHE | wc -L)
+            if [ $count -eq 0 ];then
+                FIND_SYN=0
+            fi
+            rm /home/.SEARCH_CACHE
+            StatTime1=$(stat ${arr[0]}/$i | awk 'NR==6 {print $0}'| cut -d ' ' -f 3)
+            StatTime2=$(stat ${arr[1]}/$i | awk 'NR==6 {print $0}'| cut -d ' ' -f 3)
+            if [ $FIND_SYN -eq 0 ];then                      
+                if [ ${StatTime1} = ${StatTime2} ];then                    
+                    echo ${arr[0]}>>/home/.synchro                    
+                    a=$(ls -l ${arr[0]} | grep -w $i | sed 's/ \+/ /g'| cut -d ' ' -f 1,5,9)              
+                    b=$(stat ${arr[0]}/$i  | awk 'NR==6 {print $0}'| cut -d ' ' -f 2,3)  
+                    cd ${arr[0]}
+                    c=$(file -b $i)             
+                    sed -i '$s/$/ '"$a $b $c"' /' /home/.synchro                                          
+                    flag=1
+                fi
+            fi   
+            if [ ${StatTime1} != ${StatTime2} ];then   
+                                
+                IsFileA=$(ls -l ${arr[0]}| grep -w $i | sed 's/ \+/ /g'| cut -d ' ' -f 5)
+                IsFileB=$(ls -l ${arr[1]}| grep -w $i | sed 's/ \+/ /g'| cut -d ' ' -f 5)
+                if [ $IsFileA -ne 4096 ];then
+                    if [ $IsFileB -ne 4096 ];then 
+                        echo -e "\033[1;41;30m ================================= Il y a un conflit ================================= \033[0m" 
+                        echo -e "\033[1;31m Raison: Les DEUX parties ont modifié ou creé << $i >> avant la synchronisation \033[0m"   
+                        echo -e "\n"
+                        echo -e "\033[1;33m [1] PATH:${arr[0]}: \033[0m"
+                        cat -n ${arr[0]}/$i
+                        echo -e "\n"
+                        echo -e "\033[1;33m [2] PATH:${arr[1]}: \033[0m"
+                        cat -n ${arr[1]}/$i
+                        echo -e "\n"
+                        echo -e "\033[1;41;30m ===================================================================================== \033[0m"
+                        flag=1
+                        while :;do
+                            echo -e "\n" 
+                            read -p "Le fichier de quelle partie souhaitez-vous conserver? [1]/[2]" RES
+                            echo -e "\n"
+                            if [ $RES -eq 1 ];then
+                                echo -e "\n"
+                                echo -e "\033[1;32m=== << $i >> de PATH:${arr[0]} a été conservé ===\033[0m"
+                                echo -e "\n"
+                                if [ $FIND_SYN -eq 1 ];then
+                                    rm ${arr[1]}/$i
+                                    sed -i "/$i/d" /home/.synchro   
+                                fi
+                                echo ${arr[0]}>>/home/.synchro
+                                a=$(ls -l ${arr[0]} | grep -w $i | sed 's/ \+/ /g'| cut -d ' ' -f 1,5,9)              
+                                b=$(stat ${arr[0]}/$i  | awk 'NR==6 {print $0}'| cut -d ' ' -f 2,3) 
+                                cd ${arr[0]}  
+                                c=$(file -b $i)          
+                                sed -i '$s/$/ '"$a $b $c"' /' /home/.synchro
+                                cp -rfp ${arr[0]}/$i ${arr[1]}                                   
+                                break
+                            elif [ $RES -eq 2 ];then
+                                echo -e "\n"  
+                                echo -e "\033[1;32m=== << $i >> de PATH:${arr[1]} a été conservé ===\033[0m" 
+                                if [ $FIND_SYN -eq 1 ];then
+                                    rm ${arr[0]}/$i
+                                     sed -i "/$i/d" /home/.synchro 
+                                    
+                                fi
+                                echo ${arr[1]}>>/home/.synchro
+                                a=$(ls -l ${arr[1]} | grep -w $i | sed 's/ \+/ /g'| cut -d ' ' -f 1,5,9)              
+                                b=$(stat ${arr[1]}/$i  | awk 'NR==6 {print $0}'| cut -d ' ' -f 2,3)
+                                cd ${arr[1]} 
+                                c=$(file -b $i)              
+                                sed -i '$s/$/ '"$a $b $c"' /' /home/.synchro
+                                cp -rfp ${arr[1]}/$i ${arr[0]}
+                                break
+                            else
+                                echo -e "\n" 
+                                echo -e "\033[1;31mChoisir entre les deux fichiers, s'il vous plait. [1]/[2]\033[0m" 
+                            fi
+                            
+                        done                           
+                    fi
+                fi
+            fi             
+       fi
+    Absent=0 
+    done
+done
+
+printf "\033[?25l\033[1;32m[Progression]\033[0m \033[42m\033[1m %d%% %-4s\r\033[0m" 15  
+sleep 0.05
+
+SYNCHRO ${arr[0]} ${arr[1]}
+
+printf "\033[?25l\033[1;32m[Progression]\033[0m \033[42m\033[1m %d%% %-40s\r\033[0m" 100
+sleep 0.05
+printf "\033[?25h"
+if [ $flag -eq 0 ];then
+    printf "\n"
+    printf "\n"
+    echo -e "\033[1;32m ====== Aucun fichier&Repertoire a synchronisé ====== \033[0m"
+fi
+
+echo -e "\n"
+echo -e "\033[1;46;30m================ Synchronisation est terminée ================\033[0m"   
+echo -e "\n"
